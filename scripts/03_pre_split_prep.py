@@ -1,32 +1,22 @@
 """
 03_data_preparation.py
 ----------------------------------------
-Vollständige Datenaufbereitung in EINEM Skript.
+Pre-Split Data Preparation für Intraday-Daten (1-Minute Bars)
 
 Dieses Skript:
-1. Lädt die Daily-Rohdaten
-2. Berechnet technische Features:
-    - Tagesrenditen
-    - EMAs
-    - EMA-Differenzen
-    - Volatilität
-    - RSI14
-    - z-Normalisierung
-3. Erzeugt die Target-Variable (steigt der Kurs morgen?)
-4. Bereinigt NaN-Werte
-5. Speichert das vollständig vorbereitete Dataset
-6. Erzeugt Heatmap + Target-Verteilung und speichert sie im /images Ordner
+- lädt Intraday-Rohdaten
+- berechnet leak-free technische Features
+- erzeugt das Target: Trend der nächsten Stunde
+- entfernt ungültige Zeilen
+- speichert das vorbereitete Dataset
 """
 
 import os
 import pandas as pd
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-
 
 # --------------------------------------------------------
-# Hilfsfunktionen (Feature Engineering)
+# Feature-Funktionen
 # --------------------------------------------------------
 
 def compute_rsi(series, window=14):
@@ -41,28 +31,19 @@ def compute_rsi(series, window=14):
     return 100 - (100 / (1 + rs))
 
 
-def z_norm(series, window=50):
-    mean = series.rolling(window).mean()
-    std = series.rolling(window).std(ddof=0)
-    return (series - mean) / (std + 1e-12)
-
-
 # --------------------------------------------------------
-# 1. Pfade vorbereiten
+# 1. Pfade
 # --------------------------------------------------------
 
-BASE = os.path.dirname(os.path.abspath(__file__))       # /Trade/scripts
-ROOT = os.path.abspath(os.path.join(BASE, ".."))        # /Trade
+BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.abspath(os.path.join(BASE, ".."))
+
 DATA_DIR = os.path.join(ROOT, "data")
-IMG_DIR = os.path.join(ROOT, "images")
 
-os.makedirs(IMG_DIR, exist_ok=True)
-
-input_path = os.path.join(DATA_DIR, "AAPL_daily.csv")
-output_path = os.path.join(DATA_DIR, "AAPL_prepared.csv")
+input_path = os.path.join(DATA_DIR, "AAPL_1min.csv")
+output_path = os.path.join(DATA_DIR, "AAPL_prepared_intraday.csv")
 
 print("Lade Datei:", input_path)
-
 
 # --------------------------------------------------------
 # 2. Daten laden
@@ -72,103 +53,60 @@ df = pd.read_csv(input_path)
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 df = df.sort_values("timestamp").reset_index(drop=True)
 
-print("\n=== Rohdaten ===")
-print(df.head())
-
-
 # --------------------------------------------------------
-# 3. Feature Engineering
+# 3. Feature Engineering (Pre-Split!)
 # --------------------------------------------------------
 
 features = pd.DataFrame(index=df.index)
 
-# Renditen
-features["return_1d"] = df["close"].pct_change(1)
-features["return_3d"] = df["close"].pct_change(3)
-features["return_5d"] = df["close"].pct_change(5)
-features["return_10d"] = df["close"].pct_change(10)
+# Returns
+features["return_1min"] = df["close"].pct_change(1)
+features["return_15min"] = df["close"].pct_change(15)
+features["return_60min"] = df["close"].pct_change(60)
 
-# EMAs
+# EMAs (Minutenfenster)
 features["ema_5"] = df["close"].ewm(span=5, adjust=False).mean()
-features["ema_10"] = df["close"].ewm(span=10, adjust=False).mean()
-features["ema_20"] = df["close"].ewm(span=20, adjust=False).mean()
-features["ema_50"] = df["close"].ewm(span=50, adjust=False).mean()
+features["ema_15"] = df["close"].ewm(span=15, adjust=False).mean()
+features["ema_30"] = df["close"].ewm(span=30, adjust=False).mean()
+features["ema_60"] = df["close"].ewm(span=60, adjust=False).mean()
 
-# EMA-Differenzen
-features["ema_5_20_diff"] = features["ema_5"] - features["ema_20"]
-features["ema_10_50_diff"] = features["ema_10"] - features["ema_50"]
+features["ema_5_30_diff"] = features["ema_5"] - features["ema_30"]
+features["ema_15_60_diff"] = features["ema_15"] - features["ema_60"]
 
-# Volatilität
-features["volatility_10"] = df["close"].pct_change().rolling(10).std()
-features["volatility_20"] = df["close"].pct_change().rolling(20).std()
+# Volatilität (1h)
+features["volatility_60min"] = df["close"].pct_change().rolling(60).std()
 
-# RSI
-features["rsi14"] = compute_rsi(df["close"], 14)
-
-# z-Normalisierung
-for col in features.columns:
-    features[col] = z_norm(features[col], window=50)
-
+# RSI (Intraday kürzer)
+features["rsi_14"] = compute_rsi(df["close"], 14)
 
 # --------------------------------------------------------
-# 4. Target generieren (morgen steigt?)
+# 4. Target: Trend der nächsten Stunde
 # --------------------------------------------------------
 
-df["target"] = (df["close"].shift(-1) > df["close"]).astype(int)
+df["future_mean_1h"] = (
+    df["close"]
+    .shift(-1)
+    .rolling(window=60)
+    .mean()
+)
 
-# Letzte Zeile entfernen (kein Target möglich)
-df = df.iloc[:-1]
-features = features.iloc[:-1]
-
+df["target_trend_1h"] = (df["future_mean_1h"] > df["close"]).astype(int)
 
 # --------------------------------------------------------
-# 5. Feature-Daten zusammenführen + NaN entfernen
+# 5. Zusammenführen & Bereinigen
 # --------------------------------------------------------
 
 df_final = pd.concat([df, features], axis=1)
 df_final = df_final.dropna().reset_index(drop=True)
 
-print("\n=== Finale Daten Vorschau ===")
-print(df_final.head())
-
+# Zukunfts-Infos entfernen (nur fürs Modeling)
+df_final = df_final.drop(columns=["future_mean_1h"])
 
 # --------------------------------------------------------
 # 6. Speichern
 # --------------------------------------------------------
 
 df_final.to_csv(output_path, index=False)
-print("\nDatensatz gespeichert unter:", output_path)
+print("✓ Intraday-Datensatz gespeichert:", output_path)
 
 
-# --------------------------------------------------------
-# 7. Heatmap speichern
-# --------------------------------------------------------
-
-corr = df_final[features.columns.tolist() + ["target"]].corr()
-
-plt.figure(figsize=(14, 10))
-sns.heatmap(corr, cmap="coolwarm", center=0)
-plt.title("Feature-Korrelationen (Daily)")
-heatmap_path = os.path.join(IMG_DIR, "correlations_daily.png")
-plt.savefig(heatmap_path, dpi=300)
-plt.close()
-
-print("Heatmap gespeichert unter:", heatmap_path)
-
-
-# --------------------------------------------------------
-# 8. Target-Verteilung speichern
-# --------------------------------------------------------
-
-plt.figure(figsize=(6, 4))
-df_final["target"].value_counts().plot(kind="bar", color=["red", "green"])
-plt.title("Target-Verteilung (0 = fällt, 1 = steigt)")
-plt.xticks([0, 1], ["0", "1"])
-target_plot_path = os.path.join(IMG_DIR, "target_distribution.png")
-plt.savefig(target_plot_path, dpi=300)
-plt.close()
-
-print("Target-Verteilung gespeichert unter:", target_plot_path)
-
-
-print("\n✓ Datenaufbereitung abgeschlossen!")
