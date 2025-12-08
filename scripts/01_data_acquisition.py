@@ -1,50 +1,79 @@
 import os
 from datetime import datetime
+from pathlib import Path
 
 from alpaca.data import Adjustment
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 
-# API Keys laden
+
+# ===============================
+# Alpaca API Keys
+# ===============================
 API_KEY = os.getenv("ALPACA_API_KEY")
 SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 
-# Alpaca Client erstellen
+if not API_KEY or not SECRET_KEY:
+    raise RuntimeError("ALPACA_API_KEY oder ALPACA_SECRET_KEY fehlen")
+
+
+# ===============================
+# Alpaca Client
+# ===============================
 client = StockHistoricalDataClient(API_KEY, SECRET_KEY)
 
-# Dynamisches Enddatum (heute)
+
+# ===============================
+# Zeitraum
+# ===============================
+start_date = "2022-01-01"
 end_date = datetime.today().strftime("%Y-%m-%d")
 
-# Request für 1-Minuten-Daten ab 2022
+
+# ===============================
+# Request
+# ===============================
 request_params = StockBarsRequest(
     symbol_or_symbols=["AAPL"],
     timeframe=TimeFrame.Minute,
     adjustment=Adjustment.ALL,
-    start="2022-01-01",
+    start=start_date,
     end=end_date
 )
 
-# Daten abrufen
-bars = client.get_stock_bars(request_params)
 
-# In DataFrame umwandeln
+# ===============================
+# Daten abrufen
+# ===============================
+bars = client.get_stock_bars(request_params)
 df = bars.df
+
 print(df.head())
 print(df.tail())
 
-# Pfad ermitteln
-BASE = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(BASE, ".."))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 
-# Ordner erstellen, falls er nicht existiert
+# ===============================
+# ✅ DESKTOP-PFAD (JETZT SAUBER)
+# ===============================
+SCRIPT_DIR = Path(__file__).resolve().parent          # Desktop/Trade/scripts
+PROJECT_ROOT = SCRIPT_DIR.parent                      # Desktop/Trade
+DATA_DIR = PROJECT_ROOT / "data"
+
+# Ordner sicher erstellen
 os.makedirs(DATA_DIR, exist_ok=True)
 
-# Datei speichern
-csv_path = os.path.join(DATA_DIR, "AAPL_1min.csv")
+
+# ===============================
+# CSV speichern
+# ===============================
+csv_path = DATA_DIR / "AAPL_1min.csv"
 df.to_csv(csv_path)
 
-print("AAPL 1-Minute CSV erfolgreich gespeichert in:", csv_path)
-print(bars.df['timestamp'].max())
 
+# ===============================
+# Erfolg
+# ===============================
+print("\n✅ CSV erfolgreich gespeichert:")
+print(csv_path)
+print("Letzter Timestamp:", df.index.max())

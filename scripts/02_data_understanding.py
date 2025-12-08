@@ -69,7 +69,7 @@ print("\n=== ANZAHL DER MINUTENBARS ===")
 print(len(df))
 
 # ------------------------------------------------------------
-# 4. Renditen
+# 4. Renditen & Zielgrößen
 # ------------------------------------------------------------
 
 # 1-Minuten-Rendite
@@ -78,7 +78,7 @@ df["return_1min"] = df["close"].pct_change()
 # 1-Stunden-Rendite (60 Minuten)
 df["return_1h"] = df["close"].pct_change(periods=60)
 
-# Zukunfts-Mittelwert (für Trend-Visualisierung)
+# Ø-Preis der nächsten Stunde (nur zur Visualisierung!)
 df["future_mean_1h"] = (
     df["close"]
     .shift(-1)
@@ -95,8 +95,8 @@ example_day = df["timestamp"].dt.date.iloc[-1]
 df_day = df[df["timestamp"].dt.date == example_day]
 
 plt.figure(figsize=(12, 4))
-plt.plot(df_day["timestamp"], df_day["close"], linewidth=1.0)
-plt.title(f"AAPL – Intraday Close (1-Min) am {example_day}")
+plt.plot(df_day["timestamp"], df_day["close"], linewidth=1.2)
+plt.title(f"AAPL – Intraday-Preisverlauf (1-Min) am {example_day}")
 plt.xlabel("Zeit")
 plt.ylabel("Preis")
 plt.grid(True)
@@ -107,14 +107,20 @@ plt.close()
 print("Gespeichert:", path)
 
 
-# ========== Plot 2: Histogram – 1-Stunden-Renditen ==========
-returns_1h = df["return_1h"].dropna().clip(-0.02, 0.02)
+# ========== Plot 2: Dichte – 1-Stunden-Renditen ==========
+returns_1h = df["return_1h"].dropna()
 
 plt.figure(figsize=(8, 5))
-plt.hist(returns_1h, bins=80)
-plt.title("Histogram – 1-Stunden-Renditen (60 Minuten)")
-plt.xlabel("Rendite")
-plt.ylabel("Häufigkeit")
+plt.hist(returns_1h, bins=100, density=True, alpha=0.7)
+
+plt.axvline(returns_1h.median(), linestyle="--", linewidth=1.2, label="Median")
+plt.axvline(returns_1h.quantile(0.05), linestyle=":", linewidth=1.0, label="5%-Quantil")
+plt.axvline(returns_1h.quantile(0.95), linestyle=":", linewidth=1.0, label="95%-Quantil")
+
+plt.title("Verteilung der 1-Stunden-Renditen (Dichte)")
+plt.xlabel("Rendite (60 Minuten)")
+plt.ylabel("Dichte")
+plt.legend()
 
 path = os.path.join(IMAGES_DIR, "aapl_1h_returns_hist.png")
 plt.savefig(path, dpi=300)
@@ -122,24 +128,26 @@ plt.close()
 print("Gespeichert:", path)
 
 
-# ========== Plot 3: Aktueller Preis vs. Ø-Preis der nächsten Stunde ==========
-df_trend_plot = df.dropna().iloc[-500:]
+# ========== Plot 3: Preis vs. Ø-Preis der nächsten Stunde ==========
+# kurzer, lokaler Ausschnitt (keine Linien über Nacht!)
+df_trend_plot = df.dropna().iloc[-180:]  # ca. 3 Handelsstunden
 
 plt.figure(figsize=(12, 4))
 plt.plot(
     df_trend_plot["timestamp"],
     df_trend_plot["close"],
     label="Aktueller Preis",
-    linewidth=1.0
+    linewidth=1.2
 )
 plt.plot(
     df_trend_plot["timestamp"],
     df_trend_plot["future_mean_1h"],
     label="Ø-Preis nächste Stunde",
-    linestyle="--"
+    linestyle="--",
+    linewidth=1.2
 )
 
-plt.title("AAPL – Preis vs. Ø-Preis der nächsten Stunde")
+plt.title("Trend-Definition: Aktueller Preis vs. Ø-Preis der nächsten Stunde")
 plt.xlabel("Zeit")
 plt.ylabel("Preis")
 plt.legend()
@@ -151,14 +159,17 @@ plt.close()
 print("Gespeichert:", path)
 
 
-# ========== Plot 4: Intraday-Volumenprofil ==========
+# ========== Plot 4: Intraday-Volumenprofil (nur Handelszeiten) ==========
+# US-Handelszeiten in UTC ca. 14–21 Uhr
 df["hour"] = df["timestamp"].dt.hour
-volume_by_hour = df.groupby("hour")["volume"].mean()
+df_market = df[(df["hour"] >= 14) & (df["hour"] <= 21)]
+
+volume_by_hour = df_market.groupby("hour")["volume"].mean()
 
 plt.figure(figsize=(10, 4))
 volume_by_hour.plot(kind="bar")
-plt.title("AAPL – Durchschnittliches Intraday-Volumen nach Uhrzeit")
-plt.xlabel("Stunde des Tages")
+plt.title("AAPL – Durchschnittliches Intraday-Volumen (Handelszeiten)")
+plt.xlabel("Stunde (UTC)")
 plt.ylabel("Ø Volumen")
 
 path = os.path.join(IMAGES_DIR, "aapl_intraday_volume_profile.png")
@@ -166,4 +177,4 @@ plt.savefig(path, dpi=300)
 plt.close()
 print("Gespeichert:", path)
 
-print("\n✓ Intraday Data Understanding (Trend nächster Stunde) abgeschlossen!")
+print("\n✓ Intraday Data Understanding (Trend der nächsten Stunde) abgeschlossen!")
