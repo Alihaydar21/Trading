@@ -1,52 +1,189 @@
-### Problem Definition
+---
 
-**Target**
+## Problem Definition
 
-Vorhersage der **Kursrichtung des nächsten Handelstages** (steigt oder fällt) für ausgewählte US-Large-Cap-Aktien.  
-Für jede Aktie und jeden Handelstag im Zeitraum **2018-01-01 bis heute** wird das Target wie folgt definiert:
+### **Target**
 
-- 1, wenn der Schlusskurs des nächsten Tages höher ist als der heutige Schlusskurs  
-- 0, ansonsten  
+Vorhersage der **Kursrichtung über die nächste Stunde (60 Minuten)** auf Basis von  
+**1-Minuten-Intraday-Daten** für eine US-Large-Cap-Aktie (AAPL).
 
-Formal für Tag *t*:  
-target = 1, wenn *close*₍ₜ₊₁₎ > *close*₍ₜ₎, sonst 0.
+Für jede Minute *t* im Zeitraum **2022-01-01 bis heute** wird das Target wie folgt definiert:
 
-**Input Features**
+* **1**, wenn der **durchschnittliche Schlusskurs der nächsten 60 Minuten**
+  höher ist als der aktuelle Schlusskurs
+* **0**, ansonsten
 
-- Tägliche OHLCV-Daten (*open, high, low, close, volume*) und *vwap*  
-- Normalisierte tägliche Renditen der letzten *k* Tage (k = 1, 3, 5, 10)  
-- Exponentielle gleitende Durchschnitte (EMA) über 5, 10, 20 und 50 Handelstage  
-- EMA-Differenzen (z. B. EMA₅ − EMA₂₀, EMA₁₀ − EMA₅₀)  
-- Steigung der EMAs (erste Ableitung)  
-- Rollende Volatilität (Standardabweichung) über 10 und 20 Tage  
-- RSI14 (Relative-Strength-Index)  
+Formal für Minute *t*:  
+*target = 1*, wenn  
+*(1 / 60) · Σ(closeₜ₊₁ … closeₜ₊₆₀) > closeₜ*,  
+sonst *0*.
+
+Diese Target-Definition modelliert einen **robusten Intraday-Trend** und reduziert kurzfristiges Marktrauschen im Vergleich zu einer Ein-Schritt-Vorhersage.
 
 ---
 
-### Procedure Overview
+### **Input Features**
 
-- Bezieht tägliche Kursdaten ausgewählter US-Large-Cap-Aktien über die **Alpaca Market Data API**.  
-- Bereinigt die Daten (Entfernen nicht gehandelter Tage, Vereinheitlichung des Handelskalenders).  
-- Berechnet die oben beschriebenen Features für jeden Handelstag (kein Data Leakage).  
-- Erstellt die binäre Zielvariable (steigt/fällt).  
-- Teilt die Daten zeitbasiert in **Train**, **Validation** und **Test** (z. B. Train: 2018–2022, Val: 2023, Test: 2024).  
-- Trainiert ein Klassifikationsmodell (Logistic Regression, Random Forest oder Feed-Forward-NN).  
-- Bewertet das Modell anhand von Accuracy, F1-Score und Confusion Matrix, inklusive Vergleich mit einer einfachen Baseline.  
-- Implementiert eine einfache Long-Only-Strategie, die kauft, wenn das Modell „steigt (1)“ vorhersagt, und verkauft am folgenden Handelstag.  
-- Analysiert die Strategie-Performance im Testzeitraum.
+* 1-Minuten-OHLCV-Daten (*open, high, low, close, volume*)
+* *trade_count* und *vwap*
+* Kurzfristige Renditen:
+  * 1-Minuten-Rendite
+  * 15-Minuten-Rendite
+  * 60-Minuten-Rendite
+* Exponentielle gleitende Durchschnitte (EMA):
+  * EMA über 5, 15, 30 und 60 Minuten
+* EMA-Differenzen:
+  * EMA₅ − EMA₃₀
+  * EMA₁₅ − EMA₆₀
+* Rollende Volatilität:
+  * Fenster: 15 und 60 Minuten
+* RSI14 (Relative-Strength-Index) auf Minutenbasis
 
----# Data Acquisition
+Alle Features werden **ausschließlich aus vergangenen Daten bis Zeitpunkt *t***
+berechnet (**kein Lookahead-Bias**).
 
-Dieser Schritt lädt die **täglichen Kursdaten (Daily Bars)** ausgewählter US-Large-Cap-Aktien.  
-Die Daten werden über die **Alpaca Market Data API** bezogen und enthalten die Felder:
+---
+
+## Step 1 – Data Acquisition
+
+Lädt **1-Minuten-Intraday-Kursdaten** über die **Alpaca Market Data API**.
+
+**Script**
+
+`scripts/01_data_acquisition.py`
+
+**Datenfelder**
 
 *timestamp, open, high, low, close, volume, trade_count, vwap*
 
-**Script**  
-[`scripts/01_data_acquisition/01_data_acquisition.py`](scripts/01_data_acquisition/01_data_acquisition.py)
+**Zeitraum**
 
-Das Skript lädt **Daily Bars** für den Zeitraum  
-**2018-01-01 bis zum aktuellen Datum**  
-und speichert die Rohdaten als `symbol_daily.csv` im Ordner `/data/`.
+* 2022-01-01 bis aktuelles Datum
+* Speicherung als `AAPL_1min.csv` im Ordner `/data/`
+
+---
+
+## Step 2 – Data Understanding
+
+Explorative Analyse der Intraday-Daten zur Überprüfung von Qualität, Verteilung und Struktur.
+
+**Script**
+
+`scripts/02_data_understanding.py`
+
+**Analysen & Plots**
+
+* Intraday-Close-Verlauf eines Beispiel-Handelstags
+* Histogramm der 1-Stunden-Renditen
+* Intraday-Volumenprofil nach Uhrzeit
+* Vergleich aktueller Preis vs. Ø-Preis der nächsten Stunde
+
+Ziel dieses Schrittes ist ein grundlegendes Verständnis der Intraday-Dynamik
+und der Signal-Rausch-Struktur.
+
+---
+
+## Step 3 – Pre-Split Data Preparation
+
+Feature Engineering und Target-Erzeugung **vor dem Datensplit**.
+
+**Script**
+
+`scripts/03_pre_split_prep.py`
+
+**Schritte**
+
+* Sortierung der Daten nach Zeitstempel
+* Berechnung aller technischen Features
+* Erstellung des binären Targets (*target_trend_1h*)
+* Entfernen der letzten 60 Minuten ohne gültiges Target
+* **Keine Normalisierung und keine globalen Statistiken**
+
+Das Ergebnis dieses Schrittes ist ein vollständig vorbereiteter Datensatz ohne Data Leakage.
+
+**Output**
+
+`data/AAPL_prepared_intraday.csv`
+
+---
+
+## Step 4 – Post-Split Data Preparation
+
+Zeitreihenkonforme Aufteilung und Feature-Scaling.
+
+**Script**
+
+`scripts/04_post_split_preparation.py`
+
+**Schritte**
+
+* Trennung in Features (*X*) und Target (*y*)
+* Zeitbasierter Split:
+  * ca. 70 % Train
+  * ca. 15 % Validation
+  * ca. 15 % Test
+* **Kein Shuffling**
+* Feature-Scaling mit *StandardScaler*:
+  * `fit` nur auf Trainingsdaten
+  * `transform` auf Validation- und Testdaten
+
+Dieser Schritt simuliert realistische Vorhersagebedingungen ohne Informationsleckage.
+
+---
+
+## Step 5 – Modeling: Logistic Regression (Baseline)
+
+Training eines linearen Baseline-Modells.
+
+**Script**
+
+`scripts/05_model_logistic_regression.py`
+
+**Modell**
+
+* Logistic Regression
+* Lineares Modell mit guter Interpretierbarkeit
+* Dient als Referenz für komplexere Modelle
+
+**Evaluation**
+
+* Accuracy
+* Precision
+* Recall
+* F1-Score
+* Confusion Matrix
+* Vergleich Train vs. Validation
+
+---
+
+## Step 6 – Modeling: Random Forest
+
+Training eines nicht-linearen Vergleichsmodells.
+
+**Script**
+
+`scripts/06_model_random_forest.py`
+
+**Modell**
+
+* Random Forest Classifier
+* Ensemble aus Entscheidungsbäumen
+* Modelliert nichtlineare Zusammenhänge
+
+**Zusätzliche Analyse**
+
+* Feature Importances zur Identifikation relevanter Indikatoren
+* Vergleich der Generalisierungseigenschaften mit der Logistic Regression
+
+---
+
+## Results Summary
+
+* Beide Modelle erzielen hohe Performances auf Train- und Validation-Daten
+* Die **Logistic Regression übertrifft den Random Forest leicht**
+* Der geringe Unterschied zwischen Train und Validation deutet auf
+  **gute Generalisierungsfähigkeit** hin
+* Die Ergebnisse sind im Kontext der Target-Definition zu interpretieren,
+  da Features und Target ähnliche Trendinformationen abbilden
 
 ---
