@@ -1,13 +1,14 @@
 """
 06_model_random_forest.py
 ----------------------------------------
-Zweites Modell: Random Forest Classifier
+Zweites Modell: Random Forest Classifier (Multi-Asset)
 
 Dieses Skript:
 - lädt Train- und Validation-Daten
-- trainiert einen Random Forest
+- trainiert einen Random Forest (konservativ, leak-free)
 - evaluiert auf Train und Validation
-- gibt Klassifikationsmetriken und Feature Importances aus
+- gibt Klassifikationsmetriken aus
+- zeigt Feature Importances
 """
 
 import os
@@ -41,31 +42,34 @@ print("Train Shape:", X_train.shape)
 print("Validation Shape:", X_val.shape)
 
 # --------------------------------------------------------
-# 2. Modell definieren & trainieren
+# 2. Modell definieren (bewusst konservativ!)
 # --------------------------------------------------------
 
 rf_model = RandomForestClassifier(
-    n_estimators=100,        # ↓ von 300
-    max_depth=6,             # ↓ von 8
-    min_samples_leaf=100,    # ↑ von 50
-    max_samples=0.3,         # 🔑 nur 30% der Daten pro Baum
+    n_estimators=200,
+    max_depth=8,              # begrenzt Modellkomplexität
+    min_samples_leaf=200,     # verhindert Overfitting
+    max_samples=0.3,          # Subsampling pro Baum
     class_weight="balanced",
     random_state=42,
     n_jobs=-1
 )
 
+# --------------------------------------------------------
+# 3. Trainieren
+# --------------------------------------------------------
 
 rf_model.fit(X_train, y_train)
 
 # --------------------------------------------------------
-# 3. Vorhersagen
+# 4. Vorhersagen
 # --------------------------------------------------------
 
 y_train_pred = rf_model.predict(X_train)
-y_val_pred = rf_model.predict(X_val)
+y_val_pred   = rf_model.predict(X_val)
 
 # --------------------------------------------------------
-# 4. Evaluation
+# 5. Evaluation
 # --------------------------------------------------------
 
 def evaluate(y_true, y_pred, name):
@@ -83,7 +87,7 @@ print("\nClassification Report (Validation):")
 print(classification_report(y_val, y_val_pred))
 
 # --------------------------------------------------------
-# 5. Feature Importances
+# 6. Feature Importances
 # --------------------------------------------------------
 
 importances = pd.Series(
@@ -93,3 +97,5 @@ importances = pd.Series(
 
 print("\nTop 10 Feature Importances:")
 print(importances.head(10))
+
+print("\n✓ Random Forest Training abgeschlossen!")

@@ -2,10 +2,11 @@
 04_post_split_preparation.py
 ----------------------------------------
 Post-Split Data Preparation für Intraday-ML-Projekt
+Multi-Asset-Version (AAPL, MSFT, NVDA)
 
 Dieses Skript:
-- lädt das vorbereitete Intraday-Dataset
-- führt einen zeitkonformen Train/Val/Test-Split durch
+- lädt den vorbereiteten Multi-Asset-Intraday-Datensatz
+- führt einen zeitkonformen Train/Validation/Test-Split durch
 - skaliert Features OHNE Data Leakage
 - speichert getrennte Datasets für Modeling
 """
@@ -13,6 +14,7 @@ Dieses Skript:
 import os
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+import joblib
 
 # --------------------------------------------------------
 # 1. Pfade
@@ -23,9 +25,10 @@ ROOT = os.path.abspath(os.path.join(BASE, ".."))
 
 DATA_DIR = os.path.join(ROOT, "data")
 
-input_path = os.path.join(DATA_DIR, "AAPL_prepared_intraday.csv")
+input_path = os.path.join(DATA_DIR, "MULTI_prepared_intraday.csv")
 
-print("Lade vorbereitete Daten:", input_path)
+print("Lade vorbereitete Multi-Asset-Daten:")
+print(input_path)
 
 # --------------------------------------------------------
 # 2. Daten laden
@@ -34,20 +37,33 @@ print("Lade vorbereitete Daten:", input_path)
 df = pd.read_csv(input_path)
 df["timestamp"] = pd.to_datetime(df["timestamp"])
 
+# Wichtig: zeitlich sortieren (über alle Assets!)
 df = df.sort_values("timestamp").reset_index(drop=True)
+
+print("Gesamtzeilen:", len(df))
+print("\nSymbol-Verteilung:")
+print(df["symbol"].value_counts())
 
 # --------------------------------------------------------
 # 3. Feature / Target Trennung
 # --------------------------------------------------------
 
 TARGET_COL = "target_trend_1h"
-DROP_COLS = ["timestamp", "symbol", TARGET_COL]
+
+DROP_COLS = [
+    "timestamp",
+    "symbol",
+    TARGET_COL
+]
 
 X = df.drop(columns=DROP_COLS)
 y = df[TARGET_COL]
 
+print("\nFeature-Matrix:", X.shape)
+print("Target-Vektor:", y.shape)
+
 # --------------------------------------------------------
-# 4. Zeitreihen-Split
+# 4. Zeitreihen-Split (global, leak-free)
 # --------------------------------------------------------
 
 n = len(df)
@@ -70,7 +86,7 @@ print("Validation:", X_val.shape)
 print("Test:", X_test.shape)
 
 # --------------------------------------------------------
-# 5. Scaling (nur Train fitten!)
+# 5. Scaling (NUR auf Train fitten!)
 # --------------------------------------------------------
 
 scaler = StandardScaler()
@@ -79,13 +95,13 @@ X_train_scaled = scaler.fit_transform(X_train)
 X_val_scaled   = scaler.transform(X_val)
 X_test_scaled  = scaler.transform(X_test)
 
-# Zurück in DataFrames (gut für Debugging)
+# Zurück in DataFrames
 X_train_scaled = pd.DataFrame(X_train_scaled, columns=X_train.columns)
 X_val_scaled   = pd.DataFrame(X_val_scaled, columns=X_val.columns)
 X_test_scaled  = pd.DataFrame(X_test_scaled, columns=X_test.columns)
 
 # --------------------------------------------------------
-# 6. Target-Verteilung prüfen (wichtig!)
+# 6. Target-Verteilung prüfen
 # --------------------------------------------------------
 
 print("\nTarget-Verteilung:")
@@ -106,4 +122,11 @@ y_val.to_csv(os.path.join(DATA_DIR, "y_val.csv"), index=False)
 X_test_scaled.to_csv(os.path.join(DATA_DIR, "X_test.csv"), index=False)
 y_test.to_csv(os.path.join(DATA_DIR, "y_test.csv"), index=False)
 
-print("\n✓ Post-Split Data Preparation abgeschlossen!")
+# Scaler speichern (für Deployment!)
+scaler_path = os.path.join(DATA_DIR, "scaler.pkl")
+joblib.dump(scaler, scaler_path)
+
+print("\n==============================")
+print("✅ Post-Split Data Preparation abgeschlossen!")
+print("Scaler gespeichert unter:", scaler_path)
+print("==============================")

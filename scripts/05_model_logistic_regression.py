@@ -1,10 +1,10 @@
 """
 05_model_logistic_regression.py
 ----------------------------------------
-Baseline-Modell: Logistic Regression
+Baseline-Modell: Logistic Regression (Multi-Asset)
 
 Dieses Skript:
-- lädt die post-split vorbereiteten Daten
+- lädt die post-split vorbereiteten Multi-Asset-Daten
 - trainiert eine Logistic Regression
 - evaluiert auf Train und Validation
 - gibt relevante Klassifikationsmetriken aus
@@ -46,7 +46,8 @@ print("Validation Shape:", X_val.shape)
 model = LogisticRegression(
     max_iter=1000,
     class_weight="balanced",   # wichtig bei Intraday-Daten!
-    random_state=42
+    random_state=42,
+    n_jobs=-1
 )
 
 model.fit(X_train, y_train)
@@ -56,7 +57,7 @@ model.fit(X_train, y_train)
 # --------------------------------------------------------
 
 y_train_pred = model.predict(X_train)
-y_val_pred = model.predict(X_val)
+y_val_pred   = model.predict(X_val)
 
 # --------------------------------------------------------
 # 4. Evaluation
@@ -76,4 +77,4 @@ evaluate(y_val, y_val_pred, "VALIDATION")
 print("\nClassification Report (Validation):")
 print(classification_report(y_val, y_val_pred))
 
-print("\n✓ Logistic Regression Training abgeschlossen!")
+print("\n✓ Logistic Regression Baseline abgeschlossen!")
