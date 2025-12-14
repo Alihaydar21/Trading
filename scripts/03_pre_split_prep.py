@@ -1,14 +1,16 @@
 """
-03_data_preparation.py
+03_pre_split_prep.py
 ----------------------------------------
 Pre-Split Data Preparation für Intraday-Daten (1-Minute Bars)
+Multi-Asset-Version – (ohne absolute Preise)
 
-Dieses Skript:
-- lädt Intraday-Rohdaten
-- berechnet leak-free technische Features
-- erzeugt das Target: Trend der nächsten Stunde
-- entfernt ungültige Zeilen
-- speichert das vorbereitete Dataset
+Features:
+- Returns
+- EMA-Differenzen
+- RSI
+
+Target:
+- Punktuelle 60-Minuten-Future-Rendite
 """
 
 import os
@@ -37,76 +39,91 @@ def compute_rsi(series, window=14):
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(BASE, ".."))
-
 DATA_DIR = os.path.join(ROOT, "data")
 
-input_path = os.path.join(DATA_DIR, "AAPL_1min.csv")
-output_path = os.path.join(DATA_DIR, "AAPL_prepared_intraday.csv")
-
-print("Lade Datei:", input_path)
-
 # --------------------------------------------------------
-# 2. Daten laden
+# 2. Assets
 # --------------------------------------------------------
 
-df = pd.read_csv(input_path)
-df["timestamp"] = pd.to_datetime(df["timestamp"])
-df = df.sort_values("timestamp").reset_index(drop=True)
+symbols = ["AAPL", "MSFT", "NVDA"]
+all_assets = []
 
 # --------------------------------------------------------
-# 3. Feature Engineering (Pre-Split!)
+# 3. Loop über alle Assets
 # --------------------------------------------------------
 
-features = pd.DataFrame(index=df.index)
+for symbol in symbols:
 
-# Returns
-features["return_1min"] = df["close"].pct_change(1)
-features["return_15min"] = df["close"].pct_change(15)
-features["return_60min"] = df["close"].pct_change(60)
+    print("\n==============================")
+    print(f"⚙️ Pre-Split Preparation: {symbol}")
+    print("==============================")
 
-# EMAs (Minutenfenster)
-features["ema_5"] = df["close"].ewm(span=5, adjust=False).mean()
-features["ema_15"] = df["close"].ewm(span=15, adjust=False).mean()
-features["ema_30"] = df["close"].ewm(span=30, adjust=False).mean()
-features["ema_60"] = df["close"].ewm(span=60, adjust=False).mean()
+    input_path = os.path.join(DATA_DIR, f"{symbol}_1min.csv")
+    df = pd.read_csv(input_path)
 
-features["ema_5_30_diff"] = features["ema_5"] - features["ema_30"]
-features["ema_15_60_diff"] = features["ema_15"] - features["ema_60"]
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    df["symbol"] = symbol
 
-# Volatilität (1h)
-features["volatility_60min"] = df["close"].pct_change().rolling(60).std()
+    # ----------------------------------------------------
+    # Feature Engineering (preislevel-frei!)
+    # ----------------------------------------------------
 
-# RSI (Intraday kürzer)
-features["rsi_14"] = compute_rsi(df["close"], 14)
+    features = pd.DataFrame(index=df.index)
+
+    # Returns
+    features["return_1min"] = df["close"].pct_change(1)
+    features["return_15min"] = df["close"].pct_change(15)
+
+    # EMAs (nur zur Differenzbildung)
+    ema_5 = df["close"].ewm(span=5, adjust=False).mean()
+    ema_15 = df["close"].ewm(span=15, adjust=False).mean()
+    ema_30 = df["close"].ewm(span=30, adjust=False).mean()
+
+    features["ema_5_30_diff"] = ema_5 - ema_30
+    features["ema_15_30_diff"] = ema_15 - ema_30
+
+    # RSI
+    features["rsi_14"] = compute_rsi(df["close"], 14)
+
+    # ----------------------------------------------------
+    # Target: punktueller Future Return (60 Minuten)
+    # ----------------------------------------------------
+
+    df["future_close_60m"] = df["close"].shift(-60)
+
+    df["target_trend_1h"] = (
+        df["future_close_60m"] > df["close"]
+    ).astype(int)
+
+    # ----------------------------------------------------
+    # Zusammenführen
+    # ----------------------------------------------------
+
+    df_final = pd.concat(
+        [
+            df[["timestamp", "symbol", "target_trend_1h"]],
+            features
+        ],
+        axis=1
+    )
+
+    df_final = df_final.dropna().reset_index(drop=True)
+    all_assets.append(df_final)
+
+    print(f"✓ {symbol}: {len(df_final)} Zeilen")
 
 # --------------------------------------------------------
-# 4. Target: Trend der nächsten Stunde
+# 4. Speichern
 # --------------------------------------------------------
 
-df["future_mean_1h"] = (
-    df["close"]
-    .shift(-1)
-    .rolling(window=60)
-    .mean()
-)
+df_all = pd.concat(all_assets).reset_index(drop=True)
 
-df["target_trend_1h"] = (df["future_mean_1h"] > df["close"]).astype(int)
+output_path = os.path.join(DATA_DIR, "MULTI_prepared_intraday.csv")
+df_all.to_csv(output_path, index=False)
 
-# --------------------------------------------------------
-# 5. Zusammenführen & Bereinigen
-# --------------------------------------------------------
-
-df_final = pd.concat([df, features], axis=1)
-df_final = df_final.dropna().reset_index(drop=True)
-
-# Zukunfts-Infos entfernen (nur fürs Modeling)
-df_final = df_final.drop(columns=["future_mean_1h"])
-
-# --------------------------------------------------------
-# 6. Speichern
-# --------------------------------------------------------
-
-df_final.to_csv(output_path, index=False)
-print("✓ Intraday-Datensatz gespeichert:", output_path)
-
-
+print("\n==============================")
+print("✅ Pre-Split Preparation abgeschlossen!")
+print("Gesamtzeilen:", len(df_all))
+print("Gespeichert unter:", output_path)
+print("==============================")

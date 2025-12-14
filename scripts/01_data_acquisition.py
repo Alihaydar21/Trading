@@ -35,7 +35,7 @@ end_date = datetime.today().strftime("%Y-%m-%d")
 # Request
 # ===============================
 request_params = StockBarsRequest(
-    symbol_or_symbols=["AAPL"],
+    symbol_or_symbols=["AAPL", "MSFT", "NVDA"],
     timeframe=TimeFrame.Minute,
     adjustment=Adjustment.ALL,
     start=start_date,
@@ -67,7 +67,11 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # ===============================
 # CSV speichern
 # ===============================
-csv_path = DATA_DIR / "AAPL_1min.csv"
+for symbol in ["AAPL", "MSFT", "NVDA"]:
+    df_sym = df.loc[symbol]
+    csv_path = DATA_DIR / f"{symbol}_1min.csv"
+    df_sym.to_csv(csv_path)
+    print(f"✅ gespeichert: {csv_path}")
 df.to_csv(csv_path)
 
 
