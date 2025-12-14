@@ -1,3 +1,5 @@
+# ML-based Intraday Trading System (Backtesting & Paper Trading)
+
 ---
 
 ## Problem Definition
@@ -5,41 +7,41 @@
 ### **Target**
 
 Vorhersage der **Kursrichtung über die nächste Stunde (60 Minuten)** auf Basis von  
-**1-Minuten-Intraday-Daten** für eine US-Large-Cap-Aktie (AAPL).
+**1-Minuten-Intraday-Daten**.
 
-Für jede Minute *t* im Zeitraum **2022-01-01 bis heute** wird das Target wie folgt definiert:
+Für jede Minute *t* wird das Target wie folgt definiert:
 
-* **1**, wenn der **durchschnittliche Schlusskurs der nächsten 60 Minuten**
+- **1**, wenn der **durchschnittliche Schlusskurs der nächsten 60 Minuten**
   höher ist als der aktuelle Schlusskurs
-* **0**, ansonsten
+- **0**, ansonsten
 
 Formal für Minute *t*:  
-*target = 1*, wenn  
-*(1 / 60) · Σ(closeₜ₊₁ … closeₜ₊₆₀) > closeₜ*,  
-sonst *0*.
+`target = 1`, wenn  
+`(1 / 60) · Σ(closeₜ₊₁ … closeₜ₊₆₀) > closeₜ`,  
+sonst `0`.
 
-Diese Target-Definition modelliert einen **robusten Intraday-Trend** und reduziert kurzfristiges Marktrauschen im Vergleich zu einer Ein-Schritt-Vorhersage.
+Diese Definition modelliert einen **robusten Intraday-Trend** und reduziert kurzfristiges Marktrauschen.
 
 ---
 
 ### **Input Features**
 
-* 1-Minuten-OHLCV-Daten (*open, high, low, close, volume*)
-* *trade_count* und *vwap*
-* Kurzfristige Renditen:
-  * 1-Minuten-Rendite
-  * 15-Minuten-Rendite
-  * 60-Minuten-Rendite
-* Exponentielle gleitende Durchschnitte (EMA):
-  * EMA über 5, 15, 30 und 60 Minuten
-* EMA-Differenzen:
-  * EMA₅ − EMA₃₀
-  * EMA₁₅ − EMA₆₀
-* Rollende Volatilität:
-  * Fenster: 15 und 60 Minuten
-* RSI14 (Relative-Strength-Index) auf Minutenbasis
+- 1-Minuten-OHLCV-Daten (*open, high, low, close, volume*)
+- *trade_count* und *vwap*
+- Kurzfristige Renditen:
+  - 1-Minuten-Rendite
+  - 15-Minuten-Rendite
+  - 60-Minuten-Rendite
+- Exponentielle gleitende Durchschnitte (EMA):
+  - EMA über 5, 15, 30 und 60 Minuten
+- EMA-Differenzen:
+  - EMA₅ − EMA₃₀
+  - EMA₁₅ − EMA₆₀
+- Rollende Volatilität:
+  - Fenster: 15 und 60 Minuten
+- RSI14 (Relative Strength Index)
 
-Alle Features werden **ausschließlich aus vergangenen Daten bis Zeitpunkt *t***
+Alle Features werden **ausschließlich aus historischen Daten bis Zeitpunkt *t***
 berechnet (**kein Lookahead-Bias**).
 
 ---
@@ -50,36 +52,38 @@ Lädt **1-Minuten-Intraday-Kursdaten** über die **Alpaca Market Data API**.
 
 **Script**
 
-`scripts/01_data_acquisition.py`
+- `scripts/01_data_acquisition.py`
 
-**Datenfelder**
+**Assets**
 
-*timestamp, open, high, low, close, volume, trade_count, vwap*
+- AAPL
+- MSFT
+- NVDA
 
-**Zeitraum**
+**Output**
 
-* 2022-01-01 bis aktuelles Datum
-* Speicherung als `AAPL_1min.csv` im Ordner `/data/`
+- `/data/AAPL_1min.csv`
+- `/data/MSFT_1min.csv`
+- `/data/NVDA_1min.csv`
 
 ---
 
 ## Step 2 – Data Understanding
 
-Explorative Analyse der Intraday-Daten zur Überprüfung von Qualität, Verteilung und Struktur.
+Explorative Analyse der Intraday-Daten.
 
 **Script**
 
-`scripts/02_data_understanding.py`
+- `scripts/02_data_understanding.py`
 
 **Analysen & Plots**
 
-* Intraday-Close-Verlauf eines Beispiel-Handelstags
-* Histogramm der 1-Stunden-Renditen
-* Intraday-Volumenprofil nach Uhrzeit
-* Vergleich aktueller Preis vs. Ø-Preis der nächsten Stunde
+- Intraday-Close-Verlauf eines Beispiel-Handelstags
+- Histogramm der 1-Stunden-Renditen
+- Volumenverteilung über den Handelstag
+- Vergleich aktueller Preis vs. Ø-Preis der nächsten Stunde
 
-Ziel dieses Schrittes ist ein grundlegendes Verständnis der Intraday-Dynamik
-und der Signal-Rausch-Struktur.
+Ziel: Verständnis der **Intraday-Dynamik** und der **Signal-Rausch-Struktur**.
 
 ---
 
@@ -89,101 +93,165 @@ Feature Engineering und Target-Erzeugung **vor dem Datensplit**.
 
 **Script**
 
-`scripts/03_pre_split_prep.py`
+- `scripts/03_pre_split_prep.py`
 
 **Schritte**
 
-* Sortierung der Daten nach Zeitstempel
-* Berechnung aller technischen Features
-* Erstellung des binären Targets (*target_trend_1h*)
-* Entfernen der letzten 60 Minuten ohne gültiges Target
-* **Keine Normalisierung und keine globalen Statistiken**
-
-Das Ergebnis dieses Schrittes ist ein vollständig vorbereiteter Datensatz ohne Data Leakage.
+- Sortierung nach Zeitstempel
+- Berechnung aller technischen Features
+- Erstellung des binären Targets (*target_trend_1h*)
+- Entfernen der letzten 60 Minuten ohne gültiges Target
+- Keine Normalisierung
 
 **Output**
 
-`data/AAPL_prepared_intraday.csv`
+- `data/*_prepared_intraday.csv`
 
 ---
 
 ## Step 4 – Post-Split Data Preparation
 
-Zeitreihenkonforme Aufteilung und Feature-Scaling.
+Zeitreihenkonformer Datensplit und Feature-Scaling.
 
 **Script**
 
-`scripts/04_post_split_preparation.py`
+- `scripts/04_post_split_preparation.py`
 
 **Schritte**
 
-* Trennung in Features (*X*) und Target (*y*)
-* Zeitbasierter Split:
-  * ca. 70 % Train
-  * ca. 15 % Validation
-  * ca. 15 % Test
-* **Kein Shuffling**
-* Feature-Scaling mit *StandardScaler*:
-  * `fit` nur auf Trainingsdaten
-  * `transform` auf Validation- und Testdaten
-
-Dieser Schritt simuliert realistische Vorhersagebedingungen ohne Informationsleckage.
+- Zeitbasierter Split:
+  - ~70 % Training
+  - ~15 % Validation
+  - ~15 % Test
+- Kein Shuffling
+- StandardScaler:
+  - Fit nur auf Trainingsdaten
 
 ---
 
-## Step 5 – Modeling: Logistic Regression (Baseline)
+## Step 5 – Modeling
 
-Training eines linearen Baseline-Modells.
+### **Baseline: Logistic Regression**
 
 **Script**
 
-`scripts/05_model_logistic_regression.py`
+- `scripts/05_model_logistic_regression.py`
 
-**Modell**
+**Ziel**
 
-* Logistic Regression
-* Lineares Modell mit guter Interpretierbarkeit
-* Dient als Referenz für komplexere Modelle
-
-**Evaluation**
-
-* Accuracy
-* Precision
-* Recall
-* F1-Score
-* Confusion Matrix
-* Vergleich Train vs. Validation
+- Interpretierbare Referenz
+- Vergleichsbasis für komplexere Modelle
 
 ---
 
-## Step 6 – Modeling: Random Forest
-
-Training eines nicht-linearen Vergleichsmodells.
+### **Random Forest Classifier**
 
 **Script**
 
-`scripts/06_model_random_forest.py`
+- `scripts/06_model_random_forest.py`
 
-**Modell**
+**Eigenschaften**
 
-* Random Forest Classifier
-* Ensemble aus Entscheidungsbäumen
-* Modelliert nichtlineare Zusammenhänge
-
-**Zusätzliche Analyse**
-
-* Feature Importances zur Identifikation relevanter Indikatoren
-* Vergleich der Generalisierungseigenschaften mit der Logistic Regression
+- Nichtlineares Ensemble-Modell
+- Modelliert komplexe Feature-Interaktionen
+- Analyse der Feature Importances
 
 ---
 
-## Results Summary
+## Step 6 – Backtesting (Trading Simulation)
 
-* Beide Modelle erzielen hohe Performances auf Train- und Validation-Daten
-* Die **Logistic Regression übertrifft den Random Forest leicht**
-* Der geringe Unterschied zwischen Train und Validation deutet auf
-  **gute Generalisierungsfähigkeit** hin
-* Die Ergebnisse sind im Kontext der Target-Definition zu interpretieren,
-  da Features und Target ähnliche Trendinformationen abbilden
+Simulation einer **regelbasierten Trading-Strategie**, abgeleitet aus den ML-Vorhersagen.
+
+**Script**
+
+- `scripts/07_backtesting.py`
+
+### **Trading-Logik**
+
+- Long-only
+- **Signal**: Modell gibt Wahrscheinlichkeit `p_up`
+- **Entry**: `p_up ≥ 0.6`
+- **Exit**: nach 60 Minuten
+- Return-Clipping: ±5 %
+
+### **Ergebnisse**
+
+- Trefferquote
+- Durchschnittlicher Trade-Return
+- Kumulierte Signal-Equity
+- Verteilung der Trades über Zeit
+
+Backtesting zeigt, **wie die Strategie in der Vergangenheit performt hätte**.
 
 ---
+
+## Step 7 – Paper Trading (Deployment-Simulation)
+
+Simulation eines realistischen Live-Szenarios ohne echte Orders.
+
+**Script**
+
+- `scripts/08_deployment.py`
+
+### **Setup**
+
+- Sequentielle Vorhersagen
+- Keine Zukunftsinformation
+- Zeitfenster: letzte 5 Handelstage
+- Multi-Asset-Setup (AAPL, MSFT, NVDA)
+
+### **Trading-Regeln**
+
+- Long-only
+- Entry: `p_up ≥ 0.6`
+- Exit: nach 60 Minuten
+- Asset-Filter optional aktivierbar
+
+---
+
+## Asset Filter (z. B. nur NVDA)
+
+Analyse zeigt deutliche **Performance-Unterschiede je Asset**:
+
+- **NVDA**: stark positiv
+- **AAPL**: leicht positiv
+- **MSFT**: negativ
+
+**Ableitung**
+
+- Die gleiche ML-Strategie funktioniert **nicht gleich gut für jedes Asset**
+- Asset-Selektion ist ein **entscheidender Performance-Hebel**
+- Optimierte Variante:
+  - NVDA handeln
+  - MSFT ausschließen
+  - AAPL optional
+
+---
+
+## Evaluation Summary
+
+- ML-Modell erzeugt **statistische Signale**
+- Trading-Performance hängt stark von:
+  - Entry-Schwelle
+  - Haltedauer
+  - Asset-Auswahl
+- Paper Trading bestätigt Backtesting-Ergebnisse qualitativ
+- Asset-Filter verbessert Robustheit der Strategie
+
+---
+
+## Next Steps
+
+- Asset-spezifische Modelle oder Schwellen
+- Dynamische Entry-Thresholds
+- Transaktionskosten & Slippage berücksichtigen
+- Risiko-Management (Positionsgrößen, Drawdown-Limits)
+- Erweiterung auf weitere Assets / Märkte
+- Walk-Forward-Validierung
+
+---
+
+## Fazit
+
+Das Projekt zeigt den **vollständigen Weg von ML-Modellierung bis Deployment-nahem Trading**  
+inklusive realistischer Einschränkungen und datengetriebener Entscheidungsfindung.
