@@ -1,30 +1,14 @@
 """
 05_model_logistic_regression.py
 ----------------------------------------
-Baseline-Modell: Logistic Regression (Multi-Asset)
-
-Dieses Skript:
-- lädt die post-split vorbereiteten Multi-Asset-Daten
-- trainiert eine Logistic Regression
-- evaluiert auf Train und Validation
-- gibt relevante Klassifikationsmetriken aus
+Baseline Logistic Regression + Proba-Diagnostik
 """
 
 import os
+import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    confusion_matrix,
-    classification_report
-)
-
-# --------------------------------------------------------
-# 1. Pfade
-# --------------------------------------------------------
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, classification_report
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(BASE, ".."))
@@ -39,42 +23,35 @@ y_val = pd.read_csv(os.path.join(DATA_DIR, "y_val.csv")).squeeze()
 print("Train Shape:", X_train.shape)
 print("Validation Shape:", X_val.shape)
 
-# --------------------------------------------------------
-# 2. Modell definieren & trainieren
-# --------------------------------------------------------
-
 model = LogisticRegression(
-    max_iter=1000,
-    class_weight="balanced",   # wichtig bei Intraday-Daten!
+    max_iter=2000,
+    class_weight="balanced",
     random_state=42,
-    n_jobs=-1
 )
 
 model.fit(X_train, y_train)
 
-# --------------------------------------------------------
-# 3. Vorhersagen
-# --------------------------------------------------------
-
-y_train_pred = model.predict(X_train)
-y_val_pred   = model.predict(X_val)
-
-# --------------------------------------------------------
-# 4. Evaluation
-# --------------------------------------------------------
-
 def evaluate(y_true, y_pred, name):
     print(f"\n=== {name} ===")
     print("Accuracy :", accuracy_score(y_true, y_pred))
-    print("Precision:", precision_score(y_true, y_pred))
-    print("Recall   :", recall_score(y_true, y_pred))
-    print("F1-Score :", f1_score(y_true, y_pred))
+    print("Precision:", precision_score(y_true, y_pred, zero_division=0))
+    print("Recall   :", recall_score(y_true, y_pred, zero_division=0))
+    print("F1-Score :", f1_score(y_true, y_pred, zero_division=0))
     print("Confusion Matrix:\n", confusion_matrix(y_true, y_pred))
+
+y_train_pred = model.predict(X_train)
+y_val_pred   = model.predict(X_val)
 
 evaluate(y_train, y_train_pred, "TRAIN")
 evaluate(y_val, y_val_pred, "VALIDATION")
 
 print("\nClassification Report (Validation):")
-print(classification_report(y_val, y_val_pred))
+print(classification_report(y_val, y_val_pred, zero_division=0))
+
+# Proba-Diagnostik
+p_val = model.predict_proba(X_val)[:, 1]
+print("\nProba-Stats (VAL):")
+print("min:", float(np.min(p_val)), "max:", float(np.max(p_val)))
+print("p50:", float(np.quantile(p_val, 0.50)), "p90:", float(np.quantile(p_val, 0.90)), "p99:", float(np.quantile(p_val, 0.99)))
 
 print("\n✓ Logistic Regression Baseline abgeschlossen!")
