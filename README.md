@@ -39,7 +39,9 @@ Diese Definition modelliert einen **robusten Intraday-Trend** und reduziert kurz
   - EMA₁₅ − EMA₆₀
 - Rollende Volatilität:
   - Fenster: 15 und 60 Minuten
-- RSI14 (Relative Strength Index)
+- RSI14
+- Asset-Information:
+-One-Hot-Encoding (sym_AAPL, sym_MSFT, sym_NVDA)
 
 Alle Features werden **ausschließlich aus historischen Daten bis Zeitpunkt *t***
 berechnet (**kein Lookahead-Bias**).
@@ -49,6 +51,13 @@ berechnet (**kein Lookahead-Bias**).
 ## Step 1 – Data Acquisition
 
 Lädt **1-Minuten-Intraday-Kursdaten** über die **Alpaca Market Data API**.
+Yahoo Finance (**ergänzend**). Nutzung für sehr **aktuelle** oder **fehlende Intraday-Minuten**.
+Zur Sicherstellung vollständiger Zeitabdeckung.
+
+Zeitraum:
+ca. 2022 bis **heute**
+
+Enthält verschiedene Marktphasen (Trend, Seitwärts, hohe Volatilität)
 
 **Script**
 
@@ -106,6 +115,7 @@ Feature Engineering und Target-Erzeugung **vor dem Datensplit**.
 **Output**
 
 - `data/*_prepared_intraday.csv`
+- `data/MULTI_prepared_intraday.csv`
 
 ---
 
@@ -126,6 +136,7 @@ Zeitreihenkonformer Datensplit und Feature-Scaling.
 - Kein Shuffling
 - StandardScaler:
   - Fit nur auf Trainingsdaten
+- Speicherung von scaler.pk
 
 ---
 
@@ -155,6 +166,7 @@ Zeitreihenkonformer Datensplit und Feature-Scaling.
 - Nichtlineares Ensemble-Modell
 - Modelliert komplexe Feature-Interaktionen
 - Analyse der Feature Importances
+- Asset-spezifische Effekte erkennbar
 
 ---
 
@@ -176,10 +188,10 @@ Simulation einer **regelbasierten Trading-Strategie**, abgeleitet aus den ML-Vor
 
 ### **Ergebnisse**
 
-- Trefferquote
-- Durchschnittlicher Trade-Return
-- Kumulierte Signal-Equity
-- Verteilung der Trades über Zeit
+- Anzahl Trades: 432
+- Trefferquote: ≈ 51.6 %
+- Durchschnittlicher Trade-Return: positiv
+- Kumulierte Signal-Equity: klar steigend
 
 Backtesting zeigt, **wie die Strategie in der Vergangenheit performt hätte**.
 
@@ -195,15 +207,16 @@ Simulation eines realistischen Live-Szenarios ohne echte Orders.
 
 ### **Setup**
 
-- Sequentielle Vorhersagen
+- Sequentielle Vorhersagen (1-Minuten-Takt)
 - Keine Zukunftsinformation
 - Zeitfenster: letzte 5 Handelstage
 - Multi-Asset-Setup (AAPL, MSFT, NVDA)
+- Persistenter State (Restart-sicher)
 
 ### **Trading-Regeln**
 
 - Long-only
-- Entry: `p_up ≥ 0.6`
+- Entry: `p_up ≥ 0.56`
 - Exit: nach 60 Minuten
 - Asset-Filter optional aktivierbar
 
@@ -230,28 +243,17 @@ Analyse zeigt deutliche **Performance-Unterschiede je Asset**:
 
 ## Evaluation Summary
 
-- ML-Modell erzeugt **statistische Signale**
+- ML-Modell erzeugt **statistische Wahrscheinlichkeiten**, keine direkten Kauf-/Verkaufssignale
 - Trading-Performance hängt stark von:
-  - Entry-Schwelle
-  - Haltedauer
-  - Asset-Auswahl
+- Entry-Schwelle
+- Haltedauer
+- Asset-Auswahl
 - Paper Trading bestätigt Backtesting-Ergebnisse qualitativ
-- Asset-Filter verbessert Robustheit der Strategie
-
----
-
-## Next Steps
-
-- Asset-spezifische Modelle oder Schwellen
-- Dynamische Entry-Thresholds
-- Transaktionskosten & Slippage berücksichtigen
-- Risiko-Management (Positionsgrößen, Drawdown-Limits)
-- Erweiterung auf weitere Assets / Märkte
-- Walk-Forward-Validierung
+- Asset-Filter erhöht Robustheit der Strategie
 
 ---
 
 ## Fazit
 
-Das Projekt zeigt den **vollständigen Weg von ML-Modellierung bis Deployment-nahem Trading**  
-inklusive realistischer Einschränkungen und datengetriebener Entscheidungsfindung.
+Das Projekt demonstriert den **vollständigen Data-Science-Zyklus von Datenakquise bis Deployment**,
+inklusive realistischer Trading-Regeln, systematischer Evaluation und iterativer Verbesserung.
