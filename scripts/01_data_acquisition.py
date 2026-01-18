@@ -54,7 +54,7 @@ print(df.tail())
 
 
 # ===============================
-# ✅ DESKTOP-PFAD (JETZT SAUBER)
+# DESKTOP-PFAD
 # ===============================
 SCRIPT_DIR = Path(__file__).resolve().parent          # Desktop/Trade/scripts
 PROJECT_ROOT = SCRIPT_DIR.parent                      # Desktop/Trade

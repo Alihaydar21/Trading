@@ -25,8 +25,8 @@ print("Validation Shape:", X_val.shape)
 
 rf_model = RandomForestClassifier(
     n_estimators=300,
-    max_depth=14,            # höher -> mehr Signal möglich
-    min_samples_leaf=50,     # statt 200 -> weniger Kompression
+    max_depth=14,
+    min_samples_leaf=50,
     max_samples=0.5,
     class_weight="balanced",
     random_state=42,

@@ -16,7 +16,6 @@ import os
 import time
 import json
 import requests
-import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta, timezone
 
@@ -66,7 +65,7 @@ STATE_PATH = os.path.join(ROOT, STATE_PATH)
 
 
 # --------------------------------------------------------
-# ✅ (NEU) Robust: Trades-Log sicher lesen (kein KeyError mehr)
+#  Robust: Trades-Log sicher lesen
 # --------------------------------------------------------
 def safe_read_trades_log(path: str) -> pd.DataFrame:
     """
@@ -162,7 +161,7 @@ rf.fit(X_train_full, y_train_full)
 
 
 # --------------------------------------------------------
-# 5) Feature Engineering (wie 03, live intraday-safe)
+# 5) Feature Engineering
 # --------------------------------------------------------
 def compute_rsi(series: pd.Series, window=14) -> pd.Series:
     delta = series.diff()
@@ -326,11 +325,11 @@ def main():
     print(f"Lookback Minutes: {LOOKBACK_MINUTES}")
     print("======================================================")
 
-    # ✅ (NEU) Log-Check beim Start (kein KeyError mehr)
+    # ✅ Log-Check beim Start
     df_log = safe_read_trades_log(TRADES_LOG_PATH)
     summarize_trades_log(df_log)
 
-    state = load_state()  # symbol -> iso timestamp string oder None
+    state = load_state()
 
     while True:
         now = datetime.now(timezone.utc)

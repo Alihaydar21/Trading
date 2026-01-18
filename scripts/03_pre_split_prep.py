@@ -56,7 +56,7 @@ for symbol in SYMBOLS:
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.sort_values("timestamp").reset_index(drop=True)
 
-    # symbol-spalte existiert evtl. schon; sicher setzen
+    # symbol-spalte existiert evtl. schon
     df["symbol"] = symbol
 
     # Handelstag definieren (UTC-based). Für absolute Korrektheit: US/Eastern.
@@ -96,7 +96,6 @@ for symbol in SYMBOLS:
 
     # -------------------------
     # Final
-    # (close behalten -> Backtesting sauber mergen)
     # -------------------------
     df_final = pd.concat(
         [

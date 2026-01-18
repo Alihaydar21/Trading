@@ -78,11 +78,10 @@ df_test = df_test.sort_values(["symbol", "timestamp"]).reset_index(drop=True)
 
 HOLD_MINUTES = 60
 
-# ✅ Option A: FIX Threshold
+#FIX Threshold
 THRESHOLD = 0.60
 
-# ✅ Option B: Auto-threshold (Top 5%)
-# THRESHOLD = float(np.quantile(df_test["p_up"].values, 0.95))
+#
 
 print("Using threshold:", THRESHOLD)
 
