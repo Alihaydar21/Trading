@@ -41,7 +41,7 @@ if not API_KEY or not SECRET_KEY:
 TRADE_ASSETS = ["AAPL", "MSFT", "NVDA"]
 
 QTY = float(os.getenv("TRADE_QTY", "1"))
-P_UP_THRESHOLD = float(os.getenv("P_UP_THRESHOLD", "0.512"))
+P_UP_THRESHOLD = float(os.getenv("P_UP_THRESHOLD", "0.56"))
 HOLD_MINUTES = int(os.getenv("HOLD_MINUTES", "60"))
 
 ALPACA_TRADE_BASE = os.getenv("ALPACA_PAPER_BASE_URL", "https://paper-api.alpaca.markets")
@@ -96,7 +96,7 @@ def safe_read_trades_log(path: str) -> pd.DataFrame:
 
 def summarize_trades_log(df: pd.DataFrame):
     """
-    Optional: kurze Übersicht, ohne dass der Bot crasht.
+    kurze Übersicht, ohne dass der Bot crasht.
     """
     if df is None or df.empty:
         print("[INFO] Trades-Log leer (noch keine Trades).")
@@ -194,7 +194,7 @@ def build_features_from_close(close: pd.Series) -> pd.DataFrame:
 
 
 # --------------------------------------------------------
-# 6) Alpaca Data: letzte N Minuten 1-min Bars (IEX!)
+# 6) Alpaca Data: letzte N Minuten 1-min Bars
 # --------------------------------------------------------
 data_client = StockHistoricalDataClient(API_KEY, SECRET_KEY)
 
@@ -229,7 +229,7 @@ def fetch_alpaca_recent_1m(symbol: str, lookback_minutes: int) -> pd.DataFrame:
 
 
 # --------------------------------------------------------
-# 7) Alpaca Trading (Paper): REST Orders / Positions
+# 7) Alpaca Trading: REST Orders / Positions
 # --------------------------------------------------------
 def alpaca_headers():
     return {
@@ -381,23 +381,22 @@ def main():
                     })
                     print(f"  -> BUY gesendet: {symbol} | order_id={od.get('id')}")
 
-                # Exit nach HOLD_MINUTES (wenn Entry bekannt)
-                if has_pos and entry_dt is not None:
-                    if now - entry_dt >= timedelta(minutes=HOLD_MINUTES):
-                        res = close_position(symbol)
-                        state[symbol] = None
-                        save_state(state)
-
-                        append_trade_log({
-                            "timestamp": now.isoformat(),
-                            "symbol": symbol,
-                            "action": "CLOSE",
-                            "qty": QTY,
-                            "price": latest_price,
-                            "p_up": p_up,
-                            "alpaca_order_id": (res.get("id") if isinstance(res, dict) else None)
-                        })
-                        print(f"  -> Position geschlossen: {symbol}")
+                # Wenn Position existiert aber kein entry im state -> reset: Position schließen
+                if has_pos and entry_dt is None:
+                    print(f"[WARN] {symbol}: Position existiert aber entry fehlt -> CLOSE (Reset)")
+                    res = close_position(symbol)
+                    append_trade_log({
+                        "timestamp": now.isoformat(),
+                        "symbol": symbol,
+                        "action": "FORCE_CLOSE_NO_STATE",
+                        "qty": QTY,
+                        "price": latest_price,
+                        "p_up": p_up,
+                        "alpaca_order_id": (res.get("id") if isinstance(res, dict) else None)
+                    })
+                    state[symbol] = None
+                    save_state(state)
+                    continue
 
             except Exception as e:
                 print(f"[ERROR] {symbol}: {e}")
